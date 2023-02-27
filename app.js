@@ -1,35 +1,54 @@
-// ℹ️ Gets access to environment variables/settings
-// https://www.npmjs.com/package/dotenv
-require('dotenv/config');
-
-// ℹ️ Connects to the database
-require('./db');
-
-// Handles http requests (express is node js framework)
-// https://www.npmjs.com/package/express
 const express = require('express');
-
-// Handles the handlebars
-// https://www.npmjs.com/package/hbs
-const hbs = require('hbs');
-
 const app = express();
+const mongoose = require('mongoose');
+const session = require('express-session');
+const MongoStore = require('connect-mongo')(session);
+const User = require('./models/user');
 
-// ℹ️ This function is getting exported from the config folder. It runs most middlewares
-require('./config')(app);
+mongoose.connect('mongodb://localhost/basic-auth', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+});
+mongoose.connection.on('connected', () => {
+    console.log('Mongoose connected');
+});
 
-// default value for title local
-const projectName = 'lab-express-basic-auth';
-const capitalized = string => string[0].toUpperCase() + string.slice(1).toLowerCase();
+app.set('view engine', 'ejs');
+app.set('views', __dirname + '/views');
+app.use(express.static('public'));
+app.use(express.urlencoded({ extended: true }));
 
-app.locals.title = `${capitalized(projectName)}- Generated with Ironlauncher`;
+app.use(
+    session({
+        secret: 'basic-auth-secret',
+        resave: false,
+        saveUninitialized: true,
+        store: new MongoStore({ mongooseConnection: mongoose.connection }),
+    })
+);
 
-// 👇 Start handling routes here
-const index = require('./routes/index');
-app.use('/', index);
+app.get('/', (req, res) => {
+    res.render('index');
+});
 
-// ❗ To handle errors. Routes that don't exist or errors that you handle in specific routes
-require('./error-handling')(app);
+app.get('/signup', (req, res) => {
+    res.render('signup');
+});
 
-module.exports = app;
+app.post('/signup', (req, res) => {
+    const { username, password } = req.body;
+    const user = new User({ username, password });
+    user.save((err) => {
+        if (err) return res.render('signup', { error: 'Error creating user' });
+        res.redirect('/login');
+    });
+});
+
+app.get('/login', (req, res) => {
+    res.render('login');
+});
+
+app.listen(3000, () => {
+    console.log('Server listening on port 3000');
+});
 
